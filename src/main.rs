@@ -35,11 +35,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Listening on 127.0.0.1:7878");
     Ok(axum::serve(listener, router).await?)
 }
-// 
-// mod domain;
-// use domain::models::Order;
-// 
-// fn main() {
-//     let parsed = serde_json::from_str::<Order>(std::fs::read_to_string("model.json").unwrap().as_str());
-//     println!("{:#?}", parsed);
-// }
