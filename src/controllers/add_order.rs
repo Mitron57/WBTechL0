@@ -1,3 +1,4 @@
+use tokio_postgres::error::{DbError, SqlState};
 use {
     crate::{
         application::AppState,
@@ -24,7 +25,7 @@ pub async fn add_order(
         log!(target: "add_order", Level::Warn, "Insertion failed, reason: Order already exists");
         return (
             StatusCode::CONFLICT,
-            Json(json!({"error" : "Order already exists"})),
+            Json(json!({"error" : "Order or its unique part already exists"})),
         );
     }
     drop(cache);
@@ -33,12 +34,26 @@ pub async fn add_order(
         log!(target: "add_order", Level::Warn, "Insertion failed, reason: Order already exists");
         return (
             StatusCode::CONFLICT,
-            Json(json!({"error" : "Order already exists"})),
+            Json(json!({"error" : "Order or its unique part already exists"})),
         );
     }
     if let Err(err) = database.insert(order).await {
-        log!(target: "add_order", Level::Error, "Insertion failed: err: {}", err);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()})));
+        let db_error = err.downcast_ref::<tokio_postgres::Error>();
+        if let None = db_error {
+            log!(target: "add_order", Level::Error, "Insertion failed: err: {}", err);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()})));
+        }
+        let db_error = db_error.unwrap();
+        log!(target: "add_order", Level::Error, "Insertion failed: err: {}", db_error);
+        return match db_error.code() {
+            Some(&SqlState::FOREIGN_KEY_VIOLATION) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"error" : "Can't save this order"})))
+            },
+            Some(&SqlState::UNIQUE_VIOLATION) => {
+                (StatusCode::CONFLICT, Json(json!({"error" : "Order or its unique part already exists"})))
+            }
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, Json::default()),
+        }
     }
     (StatusCode::CREATED, Json::default())
 }

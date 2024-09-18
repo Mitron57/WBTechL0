@@ -1,6 +1,7 @@
 use crate::domain::interfaces;
 use crate::domain::models::{Delivery, Item, Order, Payment};
 use log::{log, Level};
+use tokio_postgres::error::SqlState;
 use tokio_postgres::{Client, Error, NoTls, Row, Transaction};
 
 pub struct Database {
@@ -23,27 +24,31 @@ impl Database {
         transaction: Transaction<'a>,
         data: &Order,
     ) -> Result<Transaction<'a>, Box<dyn std::error::Error>> {
-        let rows = transaction.execute(
-            "INSERT INTO Orders VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT DO NOTHING",
-            &[
-                &data.order_uid,
-                &data.track_number,
-                &data.entry,
-                &data.locale,
-                &data.internal_signature,
-                &data.customer_id,
-                &data.delivery_service,
-                &data.shardkey,
-                &data.sm_id,
-                &data.date_created,
-                &data.oof_shard,
-            ],
-        )
-            .await?;
-        if rows == 0 {
-            transaction.rollback().await?;
-            log!(target: "psql", Level::Error, "Insert failed on Order: {data:?}");
-            return Err("Order insert failed".into());
+        let result = transaction
+            .execute(
+                "INSERT INTO Orders VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                &[
+                    &data.order_uid,
+                    &data.track_number,
+                    &data.entry,
+                    &data.locale,
+                    &data.internal_signature,
+                    &data.customer_id,
+                    &data.delivery_service,
+                    &data.shardkey,
+                    &data.sm_id,
+                    &data.date_created,
+                    &data.oof_shard,
+                ],
+            )
+            .await;
+        if let Err(e) = result {
+            log!(target: "psql", Level::Error, "Error adding order: {data:?} to database: {e}");
+            if let Err(roll_err) = transaction.rollback().await {
+                log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                return Err("Internal server error".into());
+            }
+            return Err(e.into());
         }
         Ok(transaction)
     }
@@ -53,9 +58,9 @@ impl Database {
         data: &Order,
     ) -> Result<Transaction<'a>, Box<dyn std::error::Error>> {
         let delivery = &data.delivery;
-        let rows = transaction
+        let result = transaction
             .query(
-                "INSERT INTO Deliveries(name, phone, zip, address, region, email) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING RETURNING id",
+                "INSERT INTO Deliveries(name, phone, zip, address, region, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
                 &[
                     &delivery.name,
                     &delivery.phone,
@@ -65,23 +70,34 @@ impl Database {
                     &delivery.email,
                 ],
             )
-            .await?;
-        if rows.is_empty() {
-            transaction.rollback().await?;
-            log!(target: "psql", Level::Error, "Insert failed on Delivery: {:?}", delivery);
-            return Err("Order insert failed".into());
+            .await;
+        let delivery_id: i32;
+        match result {
+            Ok(rows) => {
+                delivery_id = rows[0].get(0);
+            }
+            Err(err) => {
+                log!(target: "psql", Level::Error, "Error adding delivery: {delivery:?}, err: {err}");
+                if let Err(roll_err) = transaction.rollback().await {
+                    log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                    return Err("Internal server error".into());
+                }
+                return Err(err.into());
+            }
         }
-        let delivery_id = &rows[0].get::<_, i32>(0);
-        let rows = transaction
+        let result = transaction
             .execute(
-                "INSERT INTO OrderDeliveries VALUES($1, $2) ON CONFLICT DO NOTHING",
-                &[&data.order_uid, delivery_id],
+                "INSERT INTO OrderDeliveries VALUES($1, $2)",
+                &[&data.order_uid, &delivery_id],
             )
-            .await?;
-        if rows == 0 {
-            transaction.rollback().await?;
-            log!(target: "psql", Level::Error, "Insert failed on OrderDeliveries: order_uid: {}, delivery_id: {}", data.order_uid, delivery_id);
-            return Err("Order insert failed".into());
+            .await;
+        if let Err(err) = result {
+            log!(target: "psql", Level::Error, "Error adding OrderDeliveries: order_uid: {}, delivery_id : {delivery_id} {err}", data.order_uid);
+            if let Err(roll_err) = transaction.rollback().await {
+                log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                return Err("Internal server error".into());
+            }
+            return Err(err.into());
         }
         Ok(transaction)
     }
@@ -91,9 +107,9 @@ impl Database {
         data: &Order,
     ) -> Result<Transaction<'a>, Box<dyn std::error::Error>> {
         let payment = &data.payment;
-        let rows = transaction
+        let result = transaction
             .execute(
-                "INSERT INTO Payments VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING",
+                "INSERT INTO Payments VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
                 &[
                     &payment.transaction,
                     &payment.request_id,
@@ -107,22 +123,28 @@ impl Database {
                     &payment.custom_fee,
                 ],
             )
-            .await?;
-        if rows == 0 {
-            transaction.rollback().await?;
-            log!(target: "psql", Level::Error, "Insert failed on Payment: {:?}", payment);
-            return Err("Order insert failed".into());
+            .await;
+        if let Err(e) = result {
+            log!(target: "psql", Level::Error, "Error adding payment: {payment:?} to database: {e}");
+            if let Err(roll_err) = transaction.rollback().await {
+                log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                return Err("Internal server error".into());
+            }
+            return Err(e.into());
         }
-        let rows = transaction
+        let result = transaction
             .execute(
-                "INSERT INTO OrderPayments VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                "INSERT INTO OrderPayments VALUES ($1, $2)",
                 &[&data.order_uid, &payment.transaction],
             )
-            .await?;
-        if rows == 0 {
-            transaction.rollback().await?;
-            log!(target: "psql", Level::Error, "Insert failed on OrderPayments: order_uid: {}, payment_transaction: {}", data.order_uid, payment.transaction);
-            return Err("Order insert failed".into());
+            .await;
+        if let Err(e) = result {
+            log!(target: "psql", Level::Error, "Error adding OrderPayments: order_uid: {}, payment_transaction: {}, err: {e}", data.order_uid, payment.transaction);
+            if let Err(roll_err) = transaction.rollback().await {
+                log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                return Err("Internal server error".into());
+            }
+            return Err(e.into());
         }
         Ok(transaction)
     }
@@ -131,12 +153,14 @@ impl Database {
         transaction: Transaction<'a>,
         data: &Order,
     ) -> Result<Transaction<'a>, Box<dyn std::error::Error>> {
-        let items_insert = transaction.prepare("INSERT INTO Items VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT DO NOTHING;").await?;
+        let items_insert = transaction
+            .prepare("INSERT INTO Items VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT DO NOTHING;")
+            .await?;
         let order_items = transaction
-            .prepare("INSERT INTO OrderItems VALUES ($1, $2) ON CONFLICT DO NOTHING;")
+            .prepare("INSERT INTO OrderItems VALUES ($1, $2);")
             .await?;
         for item in &data.items {
-            let rows = transaction
+            let result = transaction
                 .execute(
                     &items_insert,
                     &[
@@ -153,19 +177,25 @@ impl Database {
                         &item.status,
                     ],
                 )
-                .await?;
-            if rows == 0 {
-                transaction.rollback().await?;
-                log!(target: "psql", Level::Error, "Insert failed on Item: {:?}", item);
-                return Err("Order insert failed".into());
+                .await;
+            if let Err(e) = result {
+                log!(target: "psql", Level::Warn, "Error adding item: {item:?} to database: {e}");
+                if let Err(roll_err) = transaction.rollback().await {
+                    log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                    return Err("Internal server error".into());
+                }
+                return Err(e.into());
             }
-            let rows = transaction
+            let result = transaction
                 .execute(&order_items, &[&data.order_uid, &item.chrt_id])
-                .await?;
-            if rows == 0 {
-                transaction.rollback().await?;
-                log!(target: "psql", Level::Error, "Insert failed on OrderItems, order_uid: {}, item_chrt_id: {}", data.order_uid, item.chrt_id);
-                return Err("Order insert failed".into());
+                .await;
+            if let Err(e) = result {
+                log!(target: "psql", Level::Error, "Error adding OrderItems: order_uid: {}, item_chrt_id: {}, err: {e}, code: {:?}", data.order_uid, item.chrt_id, e.code());
+                if let Err(roll_err) = transaction.rollback().await {
+                    log!(target: "psql", Level::Error, "Rollback error: {roll_err}");
+                    return Err("Internal server error".into());
+                }
+                return Err(e.into());
             }
         }
         Ok(transaction)
@@ -199,7 +229,7 @@ impl Database {
             }
             Err(err) => {
                 log!(target: "psql", Level::Error, "Get order failed, id: {}, Err: {}", order_id, err);
-                return None;
+                None
             }
         }
     }
@@ -319,7 +349,7 @@ impl Database {
 
 impl interfaces::Database for Database {
     async fn insert(&mut self, data: Order) -> Result<(), Box<dyn std::error::Error>> {
-        let mut transaction = self.client.transaction().await?;
+        let transaction = self.client.transaction().await?;
         let transaction = Self::insert_order(transaction, &data).await?;
         let transaction = Self::insert_delivery(transaction, &data).await?;
         let transaction = Self::insert_payment(transaction, &data).await?;
