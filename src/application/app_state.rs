@@ -1,7 +1,10 @@
-use std::ops::Deref;
-use crate::domain::interfaces::OrderService;
-use crate::domain::interfaces::Repository;
-use crate::utils::Interior;
+use {
+    crate::{
+        domain::interfaces::{OrderService, Repository},
+        utils::Interior,
+    },
+    std::ops::Deref,
+};
 
 pub struct AppState {
     repository: Interior<Box<dyn Repository + Send + Sync>>,

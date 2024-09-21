@@ -1,14 +1,15 @@
-use std::error::Error;
-use axum::http::StatusCode;
-use axum::Json;
-use serde_json::Value;
-use serde_json::json;
-use tokio_postgres::error::SqlState;
-use crate::infrastructure::MultiError;
+use {
+    std::error::Error,
+    axum::{http::StatusCode, Json},
+    serde_json::{Value, json},
+    tokio_postgres::error::SqlState,
+    crate::infrastructure::MultiError
+};
 
 pub fn handler(error: Box<dyn Error>) -> (StatusCode, Json<Value>) {
     let multi_error = error.downcast_ref::<MultiError>();
-    if multi_error.is_some() {
+    let pool_error = error.downcast_ref::<deadpool_postgres::PoolError>();
+    if multi_error.is_some() || pool_error.is_some() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({})));
     }
     let db_error = error.downcast_ref::<tokio_postgres::Error>();
