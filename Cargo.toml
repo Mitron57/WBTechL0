@@ -1,13 +1,19 @@
 [package]
-name = "L0"
+name = "wb_tech_l0"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-axum = { version = "0.7.5", features = ["macros"] }
-clap = { version = "4.5.17", features = ["derive"] }
+[dev-dependencies]
+axum = { version = "0.7.6", features = ["macros"] }
 tokio = { version = "1.40.0", features = ["rt-multi-thread", "rt"] }
-tokio-postgres = "0.7.11"
+
+
+[dependencies]
+axum = { version = "0.7.6", features = ["macros"] }
+clap = { version = "4.5.18", features = ["derive"] }
+tokio = { version = "1.40.0", features = ["rt-multi-thread", "rt"] }
+deadpool-postgres = { version = "0.14.0", features = ["rt_tokio_1"] }
+tokio-postgres = "0.7.12"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 log = "0.4.22"

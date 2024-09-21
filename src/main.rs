@@ -1,17 +1,14 @@
-use log::info;
 use {
-    application::AppState,
-    infrastructure::{Cache, Database},
-    std::sync::Arc,
-    controllers::{add_order, get_order},
-    axum::routing::{post, get},
+    axum::routing::{get, post},
     clap::Parser,
+    log::info,
+    std::sync::Arc,
+    wb_tech_l0::{
+        application::controllers::{add_order, get_order},
+        application::AppState,
+        infrastructure::{Cache, Database, OrderService, Repository},
+    },
 };
-
-mod application;
-mod controllers;
-mod domain;
-mod infrastructure;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -20,13 +17,15 @@ struct Args {
     database: String,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let args = Args::parse();
     let cache = Cache::new();
     let database = Database::new(args.database).await?;
-    let app_state = Arc::new(AppState::new(cache, database));
+    let repository = Box::new(Repository::new(cache, database));
+    let order_service = Box::new(OrderService);
+    let app_state = Arc::new(AppState::new(repository, order_service));
     let router = axum::Router::new()
         .route("/order/:order_uid", get(get_order))
         .route("/add_order", post(add_order))
