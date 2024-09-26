@@ -26,19 +26,22 @@ where
 #[async_trait]
 impl<C, D> interfaces::Repository for Repository<C, D>
 where
-    D: Database + Sync + Send,
-    C: Cache + Sync + Send,
+    D: Database<Error = Box<dyn Error>>,
+    C: Cache,
+    
 {
-    async fn insert(&mut self, order: Order) -> Result<(), Box<dyn Error>> {
+    
+    type Error = Box<dyn Error>;
+    async fn insert(&self, order: Order) -> Result<(), Self::Error> {
         self.database.insert(order.clone()).await
     }
 
-    async fn remove(&mut self, id: &str) -> Result<(), Box<dyn Error>> {
+    async fn remove(&self, id: &str) -> Result<(), Self::Error> {
         self.cache.remove(id).await;
         self.database.remove(id).await
     }
 
-    async fn get(&self, id: &str) -> Result<Option<Order>, Box<dyn Error>> {
+    async fn get(&self, id: &str) -> Result<Option<Order>, Self::Error> {
         if let Some(order) = self.cache.get(id).await {
             log!(target: "repository", Level::Info, "Order with uid: {id} found in cache");
             return Ok(Some(order.clone()));
@@ -46,7 +49,7 @@ where
         self.database.get(id).await
     }
 
-    async fn get_and_cache(&mut self, id: &str) -> Result<Option<Order>, Box<dyn Error>> {
+    async fn get_and_cache(&self, id: &str) -> Result<Option<Order>, Self::Error> {
         let found = self.get(id).await?;
         match found {
             Some(order) => {

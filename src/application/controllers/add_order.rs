@@ -17,7 +17,7 @@ pub async fn add_order(
 ) -> (StatusCode, Json<Value>)
 {
     log!(target: "add_order_controller", Level::Info, "Got new order: {order:?}");
-    let result = state.order_service().add_order(state.repository_mut(), order).await;
+    let result = state.order_service().add_order(state.repository(), order).await;
     if let Err(err) = result {
         return error_handler::handler(err);
     }

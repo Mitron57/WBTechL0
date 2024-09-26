@@ -19,7 +19,7 @@ impl Cache {
 
 #[async_trait]
 impl interfaces::Cache for Cache {
-    async fn add(&mut self, order_id: String, order: Order) {
+    async fn add(&self, order_id: String, order: Order) {
         self.memory.write().await.insert(order_id, Json::from(order));
     }
     
@@ -27,7 +27,7 @@ impl interfaces::Cache for Cache {
         Some(self.memory.read().await.get(order_id)?.0.clone())
     }
     
-    async fn remove(&mut self, order_id: &str) -> Option<Order> {
+    async fn remove(&self, order_id: &str) -> Option<Order> {
         Some(self.memory.write().await.remove(order_id)?.0)
     }
 }

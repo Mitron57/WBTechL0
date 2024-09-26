@@ -6,4 +6,4 @@ mod errors;
 pub use cache::Cache;
 pub use database::Database;
 pub use repository::Repository;
-pub use errors::{MultiError};
+pub use errors::MultiError;

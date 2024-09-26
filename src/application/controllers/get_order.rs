@@ -5,7 +5,6 @@ use {
     axum::{
         extract::{Path, State},
         http::StatusCode,
-        debug_handler,
         Json,
     },
     std::sync::Arc,
@@ -13,13 +12,12 @@ use {
     log::{log, Level}
 };
 
-#[debug_handler]
 pub async fn get_order(
     State(state): State<Arc<AppState>>,
     Path(order_uid): Path<String>,
 ) -> (StatusCode, Json<Value>) {
     log!(target: "get_order_controller", Level::Info, "Got new get-request by order_uid: {order_uid}");
-    match state.order_service().get_order(&order_uid, state.repository_mut()).await {
+    match state.order_service().get_order(&order_uid, state.repository()).await {
         Ok(Some(order)) => {
             (StatusCode::OK, Json(serde_json::to_value(order).unwrap()))
         }

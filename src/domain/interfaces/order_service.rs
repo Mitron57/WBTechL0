@@ -1,18 +1,22 @@
 use crate::domain::models::Order;
 use axum::async_trait;
-use crate::domain::interfaces::Repository;
+use std::error::Error;
+use crate::domain::interfaces;
+
+
+type Repository = dyn interfaces::Repository<Error=Box<dyn Error>>;
 
 #[async_trait]
-pub trait OrderService {
+pub trait OrderService: Sync + Send {
     async fn add_order(
         &self,
-        repository: &mut Box<dyn Repository + Send + Sync>,
+        repository: &Repository,
         order: Order,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> Result<(), Box<dyn Error>>;
 
     async fn get_order(
         &self,
         order_uid: &str,
-        repository: &mut Box<dyn Repository + Send + Sync>,
-    ) -> Result<Option<Order>, Box<dyn std::error::Error>>;
+        repository: &Repository,
+    ) -> Result<Option<Order>, Box<dyn Error>>;
 }

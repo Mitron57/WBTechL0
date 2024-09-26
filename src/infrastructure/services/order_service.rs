@@ -1,5 +1,4 @@
 use crate::domain::interfaces;
-use crate::domain::interfaces::Repository;
 use crate::domain::models::Order;
 use axum::async_trait;
 use log::{log, Level};
@@ -7,11 +6,13 @@ use std::error::Error;
 
 pub struct OrderService;
 
+type Repository = dyn interfaces::Repository<Error=Box<dyn Error>>;
+
 #[async_trait]
 impl interfaces::OrderService for OrderService {
     async fn add_order(
         &self,
-        repository: &mut Box<dyn Repository + Send + Sync>,
+        repository: &Repository,
         order: Order,
     ) -> Result<(), Box<dyn Error>> {
         let order_uid = order.order_uid.clone();
@@ -28,7 +29,7 @@ impl interfaces::OrderService for OrderService {
     async fn get_order(
         &self,
         order_uid: &str,
-        repository: &mut Box<dyn Repository + Send + Sync>,
+        repository: &Repository,
     ) -> Result<Option<Order>, Box<dyn Error>> {
         let result = repository.get_and_cache(order_uid).await;
         match result {

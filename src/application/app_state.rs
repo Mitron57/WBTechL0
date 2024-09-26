@@ -1,31 +1,32 @@
 use {
     crate::{
-        domain::interfaces::{OrderService, Repository},
-        utils::Interior,
+        domain::interfaces::{OrderService, self},
     },
-    std::ops::Deref,
+    std::{ops::Deref, error::Error}
 };
 
+type Repository = dyn interfaces::Repository<Error = Box<dyn Error>>;
+
 pub struct AppState {
-    repository: Interior<Box<dyn Repository + Send + Sync>>,
-    order_service: Box<dyn OrderService + Send + Sync>,
+    repository: Box<Repository>,
+    order_service: Box<dyn OrderService>,
 }
 impl AppState {
     pub fn new(
-        repository: Box<dyn Repository + Send + Sync>,
-        order_service: Box<dyn OrderService + Send + Sync>,
+        repository: Box<Repository>,
+        order_service: Box<dyn OrderService>,
     ) -> Self {
         Self {
-            repository: Interior::new(repository),
+            repository,
             order_service,
         }
     }
 
-    pub fn repository_mut(&self) -> &mut Box<dyn Repository + Send + Sync> {
-        self.repository.get_mut()
+    pub fn repository(&self) -> &Repository {
+        self.repository.deref()
     }
 
-    pub fn order_service(&self) -> &(dyn OrderService + Send + Sync) {
+    pub fn order_service(&self) -> &(dyn OrderService) { 
         self.order_service.deref()
     }
 }

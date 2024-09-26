@@ -341,7 +341,9 @@ impl Database {
 
 #[async_trait]
 impl interfaces::Database for Database {
-    async fn insert(&mut self, data: Order) -> Result<(), Box<dyn Error>> {
+    type Error = Box<dyn Error>;
+    
+    async fn insert(&self, data: Order) -> Result<(), Self::Error> {
         let mut instance = self.pool.get().await?;
         let transaction = instance.transaction().await?;
         let transaction = Self::insert_order(transaction, &data).await?;
@@ -351,7 +353,7 @@ impl interfaces::Database for Database {
         Ok(transaction.commit().await?)
     }
 
-    async fn remove(&mut self, id: &str) -> Result<(), Box<dyn Error>> {
+    async fn remove(&self, id: &str) -> Result<(), Self::Error> {
         let mut instance = self.pool.get().await?;
         let transaction = instance.transaction().await?;
         let result = transaction
@@ -366,7 +368,7 @@ impl interfaces::Database for Database {
         }
     }
 
-    async fn get(&self, id: &str) -> Result<Option<Order>, Box<dyn Error>> {
+    async fn get(&self, id: &str) -> Result<Option<Order>, Self::Error> {
         let order = self.get_order(id).await?;
         if order.is_none() {
             return Ok(None);
