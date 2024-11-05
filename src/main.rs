@@ -19,6 +19,7 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = "0.0.0.0:7878";
     env_logger::init();
     let args = Args::parse();
     let cache = Cache::new();
@@ -30,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/order/:order_uid", get(get_order))
         .route("/add_order", post(add_order))
         .with_state(app_state);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:7878").await?;
-    info!("Listening on 127.0.0.1:7878");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("Listening on {addr}");
     Ok(axum::serve(listener, router).await?)
 }
